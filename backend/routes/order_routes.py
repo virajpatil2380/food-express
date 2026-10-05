@@ -40,7 +40,6 @@ def user_orders(user_id):
 
 @order_bp.route("/orders/<int:order_id>/rate", methods=["PUT"])
 def rate_order(order_id):
-    """Save customer rating & review for an order."""
     data = request.get_json() or {}
     rating = data.get("rating")
     review_text = data.get("review_text", "")
@@ -59,6 +58,13 @@ def get_admin_orders():
     return jsonify(orders), 200
 
 
+@order_bp.route("/admin/delivery_partners", methods=["GET"])
+def get_delivery_partners():
+    """Get list of all registered delivery partners for Admin assignment."""
+    partners = OrderModel.get_delivery_partners()
+    return jsonify(partners), 200
+
+
 @order_bp.route("/admin/orders/status", methods=["PUT"])
 def update_status():
     data = request.get_json() or {}
@@ -72,26 +78,28 @@ def update_status():
     return jsonify({"message": f"Order status updated to {status}"}), 200
 
 
-# ── Delivery Boy Endpoints ──
-
-@order_bp.route("/delivery/orders", methods=["GET"])
-def get_delivery_orders():
-    delivery_user_id = request.args.get("delivery_user_id")
-    orders = OrderModel.get_delivery_orders(delivery_user_id)
-    return jsonify(orders), 200
-
-
-@order_bp.route("/delivery/pickup", methods=["PUT"])
-def pickup_order():
+@order_bp.route("/admin/orders/assign_delivery", methods=["PUT"])
+def admin_assign_delivery():
+    """Admin assigns a specific Delivery Partner to an order."""
     data = request.get_json() or {}
     order_id = data.get("order_id")
     delivery_user_id = data.get("delivery_user_id")
 
     if not order_id or not delivery_user_id:
-        return jsonify({"error": "order_id and delivery_user_id required"}), 400
+        return jsonify({"error": "order_id and delivery_user_id are required"}), 400
 
-    OrderModel.assign_delivery(order_id, delivery_user_id)
-    return jsonify({"message": f"Order #{order_id} picked up for delivery"}), 200
+    OrderModel.assign_delivery(order_id, int(delivery_user_id))
+    return jsonify({"message": f"Order #{order_id} assigned to delivery partner #{delivery_user_id}"}), 200
+
+
+# ── Delivery Boy Endpoints ──
+
+@order_bp.route("/delivery/orders", methods=["GET"])
+def get_delivery_orders():
+    delivery_user_id = request.args.get("delivery_user_id")
+    # If delivery_user_id provided, filters ONLY orders assigned to this specific driver
+    orders = OrderModel.get_delivery_orders(delivery_user_id)
+    return jsonify(orders), 200
 
 
 @order_bp.route("/delivery/delivered", methods=["PUT"])

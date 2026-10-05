@@ -135,27 +135,46 @@ class OrderModel:
         return orders
 
     @staticmethod
-    def get_delivery_orders(delivery_user_id=None):
-        """Get orders for delivery partner or admin inspection (Ready, Out for Delivery, Delivered)."""
+    def get_delivery_partners():
+        """Fetch all users registered as Delivery Partners."""
         conn, engine_type = get_db_connection()
         cursor = conn.cursor()
+        cursor.execute("SELECT user_id, name, email, phone FROM users WHERE role = 'Delivery';")
+        partners = [dict(r) for r in cursor.fetchall()] if engine_type == "sqlite" else cursor.fetchall()
+        conn.close()
+        return partners
+
+    @staticmethod
+    def get_delivery_orders(delivery_user_id=None):
+        """
+        If delivery_user_id is specified (Delivery Boy logged in), fetch ONLY orders assigned to him!
+        If None (Admin view), fetch all orders in Ready, Out for Delivery, or Delivered state.
+        """
+        conn, engine_type = get_db_connection()
+        cursor = conn.cursor()
+        ph = "%s" if engine_type == "mysql" else "?"
 
         sql = """
             SELECT o.order_id, o.user_id, u.name as customer_name, u.phone as customer_phone,
-                   o.delivery_user_id, d.name as delivery_boy_name,
+                   o.delivery_user_id, d.name as delivery_boy_name, d.phone as delivery_boy_phone,
                    o.total_amount, o.delivery_address, o.status,
                    o.payment_method, o.payment_status, o.otp_code, o.created_at
             FROM orders o
             LEFT JOIN users u ON o.user_id = u.user_id
             LEFT JOIN users d ON o.delivery_user_id = d.user_id
-            WHERE o.status IN ('Ready', 'Out for Delivery', 'Delivered')
-            ORDER BY o.created_at DESC;
         """
-        cursor.execute(sql)
+        params = []
+        if delivery_user_id:
+            sql += f" WHERE o.delivery_user_id = {ph} AND o.status IN ('Out for Delivery', 'Delivered')"
+            params.append(delivery_user_id)
+        else:
+            sql += " WHERE o.status IN ('Ready', 'Out for Delivery', 'Delivered')"
+
+        sql += " ORDER BY o.created_at DESC;"
+        cursor.execute(sql, params)
         orders = [dict(r) for r in cursor.fetchall()] if engine_type == "sqlite" else cursor.fetchall()
 
         for o in orders:
-            ph = "%s" if engine_type == "mysql" else "?"
             cursor.execute(f"""
                 SELECT oi.item_id, oi.quantity, oi.unit_price, m.name
                 FROM order_items oi JOIN menu_items m ON oi.item_id = m.item_id
@@ -177,6 +196,7 @@ class OrderModel:
 
     @staticmethod
     def assign_delivery(order_id, delivery_user_id):
+        """Admin assigns a specific Delivery Boy to an order and updates status to Out for Delivery."""
         conn, engine_type = get_db_connection()
         cursor = conn.cursor()
         ph = "%s" if engine_type == "mysql" else "?"

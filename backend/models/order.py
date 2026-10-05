@@ -136,29 +136,26 @@ class OrderModel:
 
     @staticmethod
     def get_delivery_orders(delivery_user_id=None):
-        """Get orders assigned to a delivery partner or available for pickup."""
+        """Get orders for delivery partner or admin inspection (Ready, Out for Delivery, Delivered)."""
         conn, engine_type = get_db_connection()
         cursor = conn.cursor()
-        ph = "%s" if engine_type == "mysql" else "?"
 
         sql = """
             SELECT o.order_id, o.user_id, u.name as customer_name, u.phone as customer_phone,
-                   o.delivery_user_id, o.total_amount, o.delivery_address, o.status,
+                   o.delivery_user_id, d.name as delivery_boy_name,
+                   o.total_amount, o.delivery_address, o.status,
                    o.payment_method, o.payment_status, o.otp_code, o.created_at
             FROM orders o
             LEFT JOIN users u ON o.user_id = u.user_id
-            WHERE o.status IN ('Ready', 'Out for Delivery')
+            LEFT JOIN users d ON o.delivery_user_id = d.user_id
+            WHERE o.status IN ('Ready', 'Out for Delivery', 'Delivered')
+            ORDER BY o.created_at DESC;
         """
-        params = []
-        if delivery_user_id:
-            sql += f" OR (o.delivery_user_id = {ph} AND o.status = 'Delivered')"
-            params.append(delivery_user_id)
-
-        sql += " ORDER BY o.created_at DESC;"
-        cursor.execute(sql, params)
+        cursor.execute(sql)
         orders = [dict(r) for r in cursor.fetchall()] if engine_type == "sqlite" else cursor.fetchall()
 
         for o in orders:
+            ph = "%s" if engine_type == "mysql" else "?"
             cursor.execute(f"""
                 SELECT oi.item_id, oi.quantity, oi.unit_price, m.name
                 FROM order_items oi JOIN menu_items m ON oi.item_id = m.item_id
@@ -192,7 +189,6 @@ class OrderModel:
 
     @staticmethod
     def save_rating(order_id, rating, review_text=""):
-        """Save customer 1-5 star rating & feedback review."""
         conn, engine_type = get_db_connection()
         cursor = conn.cursor()
         ph = "%s" if engine_type == "mysql" else "?"

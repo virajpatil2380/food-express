@@ -4,59 +4,44 @@ from frontend.utils import api_get, api_put
 
 def render_delivery_panel():
     user = st.session_state.get("user", {})
-    user_role = user.get("role", "Delivery")
     delivery_user_id = user.get("user_id")
 
-    st.markdown("## 🚚 Delivery Partner & Fleet Dashboard")
-    st.caption(f"Logged in as: **{user.get('name', 'Driver')}** ({user_role})")
+    st.markdown("## 🚚 Delivery Partner & Logistics Panel")
+    st.caption(f"Logistics View | Active Account: **{user.get('name', 'Driver')}** ({user.get('role', 'Delivery')})")
 
-    col_btn, col_info = st.columns([1, 3])
-    with col_btn:
-        if st.button("🔄 Refresh Queue", use_container_width=True):
-            st.rerun()
+    if st.button("🔄 Refresh Delivery Queue", use_container_width=False):
+        st.rerun()
 
-    # Fetch orders based on role: Admin sees all fleet orders, Delivery sees active/ready orders
-    if user_role == "Admin":
-        orders, err = api_get("/admin/orders")
-    else:
-        orders, err = api_get("/delivery/orders", params={"delivery_user_id": delivery_user_id})
+    orders, err = api_get("/delivery/orders", params={"delivery_user_id": delivery_user_id})
 
     if err:
         st.error(err)
         return
 
-    if not orders:
-        st.info("ℹ️ No active orders in delivery pipeline yet. Place an order as Customer, and mark it 'Ready' in Kitchen!")
+    ready_orders = [o for o in orders if o["status"] == "Ready"] if orders else []
+    active_orders = [o for o in orders if o["status"] == "Out for Delivery"] if orders else []
+    done_orders = [o for o in orders if o["status"] == "Delivered"] if orders else []
+
+    c1, c2, c3 = st.columns(3)
+    c1.metric("📦 Ready for Pickup", len(ready_orders))
+    c2.metric("🚚 On the Way", len(active_orders))
+    c3.metric("✅ Delivered History", len(done_orders))
+
+    st.divider()
+
+    if not orders or (not ready_orders and not active_orders and not done_orders):
+        st.info("💡 **Delivery Queue Status:** No active orders in `Ready` or `Out for Delivery` state.")
         st.markdown("""
-        <div style="background: #FFF8F0; padding: 16px; border-radius: 12px; border: 1px dashed #FFE0B2;">
-            <h4 style="margin:0 0 8px 0; color: #E65100;">💡 How the Delivery Workflow Works:</h4>
-            <ol style="margin:0; padding-left: 20px; color: #475569;">
-                <li><b>Customer places an order</b> (Status = <i>Pending</i>).</li>
-                <li><b>Kitchen starts cooking</b> (Status = <i>Preparing</i>) and marks it <b>'Ready'</b>.</li>
-                <li>The order immediately appears here in the <b>'Ready for Pickup'</b> section!</li>
-                <li>Delivery Boy clicks <b>'Pick Up'</b> ➔ Status = <i>Out for Delivery</i>.</li>
-                <li>Delivery Boy verifies OTP PIN &amp; clicks <b>'Confirm Handover'</b> ➔ Status = <i>Delivered</i>!</li>
+        <div style="background:#FFF3E0; padding:16px; border-radius:12px; border:1px solid #FFE0B2; margin-top:10px;">
+            <h4 style="margin:0 0 8px 0; color:#E65100;">ℹ️ How Delivery Queue Works:</h4>
+            <ol style="margin:0; padding-left:20px; color:#555;">
+                <li><b>Customer</b> places an order (Status: 🔴 <i>Pending</i>).</li>
+                <li><b>Kitchen</b> cooks the food and clicks <b>'Mark Ready for Pickup'</b> (Status: 🟢 <i>Ready</i>).</li>
+                <li>The moment Kitchen marks it Ready, the order automatically appears right here for pickup!</li>
             </ol>
         </div>
         """, unsafe_allow_html=True)
         return
-
-    ready_orders = [o for o in orders if o["status"] == "Ready"]
-    active_orders = [o for o in orders if o["status"] == "Out for Delivery"]
-    done_orders = [o for o in orders if o["status"] == "Delivered"]
-    pending_prep_orders = [o for o in orders if o["status"] in ("Pending", "Preparing")]
-
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("🍳 In Kitchen", len(pending_prep_orders))
-    c2.metric("📦 Ready for Pickup", len(ready_orders))
-    c3.metric("🚚 On the Way", len(active_orders))
-    c4.metric("✅ Delivered", len(done_orders))
-
-    st.divider()
-
-    # If no ready or active orders, show helpful guide
-    if not ready_orders and not active_orders and not done_orders:
-        st.info("ℹ️ Kitchen is currently preparing orders. Orders will move here as soon as Kitchen marks them 'Ready'!")
 
     # ── 1. READY FOR PICKUP ──
     if ready_orders:
@@ -66,8 +51,8 @@ def render_delivery_panel():
             with st.container(border=True):
                 col1, col2 = st.columns([3, 1])
                 with col1:
-                    st.markdown(f"**Order #{oid}** 🟢 `Food Ready in Kitchen`")
-                    st.write(f"👤 Customer: **{order.get('customer_name', 'Guest')}** · 📞 Phone: `{order.get('customer_phone', 'N/A')}`")
+                    st.markdown(f"### Order #{oid} 🟢 `Food Ready in Kitchen`")
+                    st.write(f"👤 Customer: **{order.get('customer_name', 'Guest')}** · 📞 Call: `{order.get('customer_phone', 'N/A')}`")
                     st.write(f"📍 **Address:** {order['delivery_address']}")
                 with col2:
                     st.markdown(f"**₹{float(order['total_amount']):.2f}**")
@@ -111,6 +96,9 @@ def render_delivery_panel():
 
     # ── 3. COMPLETED DELIVERIES ──
     if done_orders:
-        with st.expander(f"✅ Completed Deliveries ({len(done_orders)})", expanded=False):
+        with st.expander(f"✅ Completed Deliveries ({len(done_orders)})", expanded=True):
             for order in done_orders:
-                st.write(f"Order #{order['order_id']} · ₹{float(order['total_amount']):.2f} · Customer: {order.get('customer_name', 'Guest')} · Rating: {'⭐' * int(order.get('rating') or 5)}")
+                c1, c2, c3 = st.columns([2, 2, 1])
+                c1.write(f"**Order #{order['order_id']}**")
+                c2.write(f"Customer: {order.get('customer_name', 'Guest')} ({order.get('customer_phone', 'N/A')})")
+                c3.write(f"**₹{float(order['total_amount']):.2f}**")

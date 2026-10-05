@@ -3,9 +3,6 @@ from backend.models.order import OrderModel
 
 order_bp = Blueprint("orders", __name__, url_prefix="/api")
 
-# Complete workflow statuses:
-# Pending → Preparing → Ready → Out for Delivery → Delivered
-# Any stage can → Cancelled
 VALID_STATUSES = ["Pending", "Preparing", "Ready", "Out for Delivery", "Delivered", "Cancelled"]
 
 
@@ -41,6 +38,20 @@ def user_orders(user_id):
     return jsonify(orders), 200
 
 
+@order_bp.route("/orders/<int:order_id>/rate", methods=["PUT"])
+def rate_order(order_id):
+    """Save customer rating & review for an order."""
+    data = request.get_json() or {}
+    rating = data.get("rating")
+    review_text = data.get("review_text", "")
+
+    if not rating or not (1 <= int(rating) <= 5):
+        return jsonify({"error": "Valid rating between 1 and 5 is required"}), 400
+
+    OrderModel.save_rating(order_id, int(rating), review_text.strip())
+    return jsonify({"message": "Thank you for your rating & feedback!"}), 200
+
+
 @order_bp.route("/admin/orders", methods=["GET"])
 def get_admin_orders():
     status = request.args.get("status")
@@ -65,7 +76,6 @@ def update_status():
 
 @order_bp.route("/delivery/orders", methods=["GET"])
 def get_delivery_orders():
-    """Get orders that are Ready for pickup or assigned to delivery."""
     delivery_user_id = request.args.get("delivery_user_id")
     orders = OrderModel.get_delivery_orders(delivery_user_id)
     return jsonify(orders), 200
@@ -73,7 +83,6 @@ def get_delivery_orders():
 
 @order_bp.route("/delivery/pickup", methods=["PUT"])
 def pickup_order():
-    """Delivery boy picks up a Ready order."""
     data = request.get_json() or {}
     order_id = data.get("order_id")
     delivery_user_id = data.get("delivery_user_id")
@@ -87,7 +96,6 @@ def pickup_order():
 
 @order_bp.route("/delivery/delivered", methods=["PUT"])
 def mark_delivered():
-    """Delivery boy marks order as delivered."""
     data = request.get_json() or {}
     order_id = data.get("order_id")
 

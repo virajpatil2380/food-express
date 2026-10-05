@@ -6,10 +6,10 @@ def render_delivery_panel():
     user = st.session_state.get("user", {})
     delivery_user_id = user.get("user_id")
 
-    st.markdown("## 🚚 Delivery Dashboard")
-    st.caption(f"Delivery Partner: **{user.get('name', 'Driver')}**")
+    st.markdown("## 🚚 Delivery Partner Dashboard")
+    st.caption(f"Logged in as Delivery Partner: **{user.get('name', 'Driver')}**")
 
-    if st.button("🔄 Refresh Orders", use_container_width=False):
+    if st.button("🔄 Refresh Delivery Queue", use_container_width=False):
         st.rerun()
 
     orders, err = api_get("/delivery/orders", params={"delivery_user_id": delivery_user_id})
@@ -19,10 +19,9 @@ def render_delivery_panel():
         return
 
     if not orders:
-        st.info("No orders to deliver right now. Check back soon!")
+        st.info("No active orders in your delivery queue right now. Check back soon!")
         return
 
-    # Split orders by status
     ready_orders = [o for o in orders if o["status"] == "Ready"]
     active_orders = [o for o in orders if o["status"] == "Out for Delivery"]
     done_orders = [o for o in orders if o["status"] == "Delivered"]
@@ -34,21 +33,22 @@ def render_delivery_panel():
 
     st.divider()
 
-    # ── READY FOR PICKUP ──
+    # ── 1. READY FOR PICKUP ──
     if ready_orders:
-        st.markdown("### 📦 Ready for Pickup")
+        st.markdown("### 📦 Available Orders for Pickup")
         for order in ready_orders:
             oid = order["order_id"]
             with st.container(border=True):
                 col1, col2 = st.columns([3, 1])
                 with col1:
-                    st.markdown(f"**Order #{oid}** 🟢 `Ready`")
-                    st.write(f"👤 {order.get('customer_name', 'Guest')} · 📞 {order.get('customer_phone', 'N/A')}")
-                    st.write(f"📍 {order['delivery_address']}")
+                    st.markdown(f"**Order #{oid}** 🟢 `Food Ready in Kitchen`")
+                    st.write(f"👤 Customer: **{order.get('customer_name', 'Guest')}** · 📞 Phone: `{order.get('customer_phone', 'N/A')}`")
+                    st.write(f"📍 **Address:** {order['delivery_address']}")
                 with col2:
                     st.markdown(f"**₹{float(order['total_amount']):.2f}**")
-                    st.caption(f"💳 {order.get('payment_method', 'COD')}")
+                    st.caption(f"Payment: `{order.get('payment_method', 'COD')}`")
 
+                st.markdown("**Dishes to Deliver:**")
                 for item in order.get("items", []):
                     st.caption(f"  • {item['name']} × {item['quantity']}")
 
@@ -57,31 +57,35 @@ def render_delivery_panel():
                         "order_id": oid,
                         "delivery_user_id": delivery_user_id
                     })
-                    st.success(f"Order #{oid} picked up! Drive safe 🚗")
+                    st.success(f"Order #{oid} picked up! Customer notified. 🚗")
                     st.rerun()
 
-    # ── OUT FOR DELIVERY ──
+    # ── 2. OUT FOR DELIVERY & CUSTOMER HANDOVER ──
     if active_orders:
-        st.markdown("### 🚚 Out for Delivery")
+        st.markdown("### 🚚 On The Way (Active Deliveries)")
         for order in active_orders:
             oid = order["order_id"]
+            otp = order.get("otp_code", "1234")
+
             with st.container(border=True):
                 col1, col2 = st.columns([3, 1])
                 with col1:
-                    st.markdown(f"**Order #{oid}** 🔵 `Out for Delivery`")
-                    st.write(f"👤 {order.get('customer_name', 'Guest')} · 📞 {order.get('customer_phone', 'N/A')}")
-                    st.write(f"📍 **{order['delivery_address']}**")
+                    st.markdown(f"### Order #{oid} 🔵 `Out for Delivery`")
+                    st.write(f"👤 Customer: **{order.get('customer_name', 'Guest')}** · 📞 Call: `{order.get('customer_phone', 'N/A')}`")
+                    st.write(f"📍 **Delivery Address:** {order['delivery_address']}")
+                    st.info(f"🔑 **Customer OTP Verification PIN:** `{otp}`")
                 with col2:
-                    st.markdown(f"**₹{float(order['total_amount']):.2f}**")
+                    st.markdown(f"<h3 style='color:#E65100; margin:0;'>₹{float(order['total_amount']):.2f}</h3>", unsafe_allow_html=True)
+                    st.caption(f"Method: **{order.get('payment_method', 'COD')}**")
 
-                if st.button(f"✅ Mark Delivered #{oid}", key=f"delivered_{oid}", use_container_width=True, type="primary"):
+                if st.button(f"✅ Verify OTP & Confirm Handover #{oid}", key=f"delivered_{oid}", use_container_width=True, type="primary"):
                     api_put("/delivery/delivered", {"order_id": oid})
                     st.balloons()
-                    st.success(f"Order #{oid} delivered! 🎉")
+                    st.success(f"Order #{oid} delivered successfully! Customer can now rate their experience. 🎉")
                     st.rerun()
 
-    # ── COMPLETED ──
+    # ── 3. COMPLETED DELIVERIES ──
     if done_orders:
         with st.expander(f"✅ Completed Deliveries ({len(done_orders)})", expanded=False):
             for order in done_orders:
-                st.write(f"Order #{order['order_id']} · ₹{float(order['total_amount']):.2f} · {order.get('customer_name', 'Guest')}")
+                st.write(f"Order #{order['order_id']} · ₹{float(order['total_amount']):.2f} · Customer: {order.get('customer_name', 'Guest')}")

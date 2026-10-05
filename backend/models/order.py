@@ -1,3 +1,4 @@
+import random
 from backend.database import get_db_connection
 
 
@@ -11,12 +12,13 @@ class OrderModel:
         try:
             total_amount = sum(item["qty"] * float(item["price"]) for item in items)
             total_with_gst = total_amount * 1.05
+            otp_code = f"{random.randint(1000, 9999)}"
 
             sql = f"""
-                INSERT INTO orders (user_id, total_amount, delivery_address, status, payment_method, payment_status)
-                VALUES ({ph}, {ph}, {ph}, 'Pending', {ph}, 'Pending');
+                INSERT INTO orders (user_id, total_amount, delivery_address, status, payment_method, payment_status, otp_code)
+                VALUES ({ph}, {ph}, {ph}, 'Pending', {ph}, 'Pending', {ph});
             """
-            cursor.execute(sql, (user_id or 1, total_with_gst, delivery_address, payment_method))
+            cursor.execute(sql, (user_id or 1, total_with_gst, delivery_address, payment_method, otp_code))
             order_id = cursor.lastrowid
 
             for item in items:
@@ -77,7 +79,7 @@ class OrderModel:
         ph = "%s" if engine_type == "mysql" else "?"
 
         cursor.execute(f"""
-            SELECT o.*, d.name as delivery_boy_name
+            SELECT o.*, d.name as delivery_boy_name, d.phone as delivery_boy_phone
             FROM orders o
             LEFT JOIN users d ON o.delivery_user_id = d.user_id
             WHERE o.user_id = {ph}
@@ -107,7 +109,7 @@ class OrderModel:
             SELECT o.order_id, o.user_id, u.name as customer_name, u.phone as customer_phone,
                    o.delivery_user_id, d.name as delivery_boy_name,
                    o.total_amount, o.delivery_address, o.status, o.payment_method, o.payment_status,
-                   o.transaction_id, o.created_at
+                   o.transaction_id, o.otp_code, o.rating, o.review_text, o.created_at
             FROM orders o
             LEFT JOIN users u ON o.user_id = u.user_id
             LEFT JOIN users d ON o.delivery_user_id = d.user_id
@@ -134,7 +136,7 @@ class OrderModel:
 
     @staticmethod
     def get_delivery_orders(delivery_user_id=None):
-        """Get orders assigned to a delivery boy, or all 'Ready' orders for pickup."""
+        """Get orders assigned to a delivery partner or available for pickup."""
         conn, engine_type = get_db_connection()
         cursor = conn.cursor()
         ph = "%s" if engine_type == "mysql" else "?"
@@ -142,7 +144,7 @@ class OrderModel:
         sql = """
             SELECT o.order_id, o.user_id, u.name as customer_name, u.phone as customer_phone,
                    o.delivery_user_id, o.total_amount, o.delivery_address, o.status,
-                   o.payment_method, o.payment_status, o.created_at
+                   o.payment_method, o.payment_status, o.otp_code, o.created_at
             FROM orders o
             LEFT JOIN users u ON o.user_id = u.user_id
             WHERE o.status IN ('Ready', 'Out for Delivery')
@@ -152,7 +154,7 @@ class OrderModel:
             sql += f" OR (o.delivery_user_id = {ph} AND o.status = 'Delivered')"
             params.append(delivery_user_id)
 
-        sql += " ORDER BY FIELD(o.status, 'Ready', 'Out for Delivery', 'Delivered'), o.created_at DESC;" if engine_type == "mysql" else " ORDER BY o.created_at DESC;"
+        sql += " ORDER BY o.created_at DESC;"
         cursor.execute(sql, params)
         orders = [dict(r) for r in cursor.fetchall()] if engine_type == "sqlite" else cursor.fetchall()
 
@@ -178,7 +180,6 @@ class OrderModel:
 
     @staticmethod
     def assign_delivery(order_id, delivery_user_id):
-        """Assign a delivery boy to an order and set status to Out for Delivery."""
         conn, engine_type = get_db_connection()
         cursor = conn.cursor()
         ph = "%s" if engine_type == "mysql" else "?"
@@ -188,3 +189,17 @@ class OrderModel:
         )
         conn.commit()
         conn.close()
+
+    @staticmethod
+    def save_rating(order_id, rating, review_text=""):
+        """Save customer 1-5 star rating & feedback review."""
+        conn, engine_type = get_db_connection()
+        cursor = conn.cursor()
+        ph = "%s" if engine_type == "mysql" else "?"
+        cursor.execute(
+            f"UPDATE orders SET rating = {ph}, review_text = {ph} WHERE order_id = {ph};",
+            (rating, review_text, order_id)
+        )
+        conn.commit()
+        conn.close()
+        return True

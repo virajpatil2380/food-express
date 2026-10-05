@@ -2,6 +2,7 @@ import sqlite3
 import pymysql
 import os
 import sys
+import random
 from backend.config import Config
 
 
@@ -40,10 +41,9 @@ def init_db():
 
     if engine_type == "sqlite":
         cursor.execute("PRAGMA foreign_keys = ON;")
-        # Drop old tables if schema outdated
         cursor.execute("PRAGMA table_info(orders);")
         cols = [r[1] for r in cursor.fetchall()]
-        if cols and "delivery_user_id" not in cols:
+        if cols and "rating" not in cols:
             for t in ["order_items", "payments", "orders", "menu_items", "categories", "users"]:
                 cursor.execute(f"DROP TABLE IF EXISTS {t};")
             conn.commit()
@@ -82,6 +82,9 @@ def init_db():
             payment_method TEXT DEFAULT 'COD',
             payment_status TEXT DEFAULT 'Pending',
             transaction_id TEXT,
+            otp_code TEXT,
+            rating INTEGER,
+            review_text TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (user_id) REFERENCES users(user_id),
             FOREIGN KEY (delivery_user_id) REFERENCES users(user_id)
@@ -149,6 +152,9 @@ def init_db():
             payment_method ENUM('UPI', 'COD', 'Card') DEFAULT 'COD',
             payment_status ENUM('Pending', 'Completed', 'Failed') DEFAULT 'Pending',
             transaction_id VARCHAR(100),
+            otp_code VARCHAR(10),
+            rating INT,
+            review_text TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (user_id) REFERENCES users(user_id),
             FOREIGN KEY (delivery_user_id) REFERENCES users(user_id)
@@ -179,13 +185,31 @@ def init_db():
         );
         """)
 
-        # Add delivery_user_id column if missing (migration for existing DBs)
+        # Add delivery_user_id column if missing
         try:
             cursor.execute("ALTER TABLE orders ADD COLUMN delivery_user_id INT AFTER user_id;")
         except Exception:
-            pass  # Column already exists
+            pass
 
-        # Add 'Ready' to status enum if missing (migration)
+        # Add otp_code column if missing
+        try:
+            cursor.execute("ALTER TABLE orders ADD COLUMN otp_code VARCHAR(10) AFTER transaction_id;")
+        except Exception:
+            pass
+
+        # Add rating column if missing
+        try:
+            cursor.execute("ALTER TABLE orders ADD COLUMN rating INT AFTER otp_code;")
+        except Exception:
+            pass
+
+        # Add review_text column if missing
+        try:
+            cursor.execute("ALTER TABLE orders ADD COLUMN review_text TEXT AFTER rating;")
+        except Exception:
+            pass
+
+        # Add 'Ready' to status enum if missing
         try:
             cursor.execute("""
                 ALTER TABLE orders MODIFY COLUMN status
@@ -195,7 +219,7 @@ def init_db():
         except Exception:
             pass
 
-        # Add 'Delivery' to role enum if missing (migration)
+        # Add 'Delivery' to role enum if missing
         try:
             cursor.execute("""
                 ALTER TABLE users MODIFY COLUMN role

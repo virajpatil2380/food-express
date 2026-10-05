@@ -1,12 +1,12 @@
 import streamlit as st
-from frontend.utils import api_get, api_post
+from frontend.utils import api_get, api_post, api_put
 
 
 def render_customer_portal():
     user = st.session_state.get("user", {})
     user_id = user.get("user_id", 1)
 
-    # ─── ANIMATED HERO BANNER ───
+    # ─── HERO BANNER ───
     st.markdown("""
     <div style="
         background: linear-gradient(135deg, #FF5722 0%, #E64A19 50%, #D84315 100%);
@@ -34,7 +34,7 @@ def render_customer_portal():
     </div>
     """, unsafe_allow_html=True)
 
-    tabs = st.tabs(["🔥 Explore Gourmet Menu", "🛒 Cart & Checkout", "📍 Live Order Tracker"])
+    tabs = st.tabs(["🔥 Explore Gourmet Menu", "🛒 Cart & Checkout", "📍 Live Order Tracking"])
 
     # ─── TAB 1: ANIMATED FOOD SHOWCASE ───
     with tabs[0]:
@@ -68,7 +68,7 @@ def render_customer_portal():
 
         st.caption(f"Showing **{len(items)}** gourmet dishes available right now:")
 
-        # Render Food Cards in 3-column Grid with Cards Design & Badge
+        # Grid view
         cols = st.columns(3)
         for idx, item in enumerate(items):
             with cols[idx % 3]:
@@ -79,7 +79,6 @@ def render_customer_portal():
                     avail = item.get("is_available", True)
                     price = float(item["price"])
 
-                    # Top Badges & Header Overlay
                     st.markdown(f"""
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
                         <span style="background: linear-gradient(135deg, #FFF3E0, #FFE0B2); color: #E65100; padding: 4px 12px; border-radius: 14px; font-size: 12px; font-weight: 800; border: 1px solid #FFE0B2;">
@@ -91,10 +90,8 @@ def render_customer_portal():
                     </div>
                     """, unsafe_allow_html=True)
 
-                    # Food Image
                     st.image(img, use_container_width=True)
 
-                    # Dish Title & Price Tag
                     st.markdown(f"""
                     <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-top: 8px;">
                         <div>
@@ -107,11 +104,9 @@ def render_customer_portal():
                     </div>
                     """, unsafe_allow_html=True)
 
-                    # Description
                     desc = item.get("description") or "Chef's special freshly prepared delicious dish."
                     st.markdown(f"<p style='color: #64748B; font-size: 13px; margin: 8px 0 12px 0; min-height: 38px;'>{desc[:110] + ('...' if len(desc) > 110 else '')}</p>", unsafe_allow_html=True)
 
-                    # Interactive Cart Controls
                     if avail:
                         qty = st.session_state.cart.get(item_id, {}).get("qty", 0)
 
@@ -224,9 +219,9 @@ def render_customer_portal():
                             st.balloons()
                             st.success(f"🎉 Order #{order_id} placed successfully! You can track live updates in 'Live Order Tracking'.")
 
-    # ─── TAB 3: LIVE ORDER TRACKING ───
+    # ─── TAB 3: LIVE TRACKING & CUSTOMER INTERACTION ───
     with tabs[2]:
-        st.subheader("📍 Live Order Tracking & History")
+        st.subheader("📍 Live Order Tracking & Customer Handover Interaction")
 
         orders, err = api_get(f"/orders/user/{user_id}")
         if err:
@@ -240,6 +235,9 @@ def render_customer_portal():
         for order in orders:
             oid = order["order_id"]
             status = order.get("status", "Pending")
+            otp = order.get("otp_code", "1234")
+            rating = order.get("rating")
+            review = order.get("review_text", "")
 
             with st.container(border=True):
                 col1, col2 = st.columns([3, 1])
@@ -250,7 +248,6 @@ def render_customer_portal():
                 with col2:
                     st.markdown(f"<h3 style='color:#E65100; margin:0;'>₹{float(order['total_amount']):.2f}</h3>", unsafe_allow_html=True)
 
-                # Display items list
                 st.markdown("**Dishes Ordered:**")
                 for itm in order.get("items", []):
                     st.write(f"• **{itm['name']}** × {itm['quantity']} @ ₹{float(itm['unit_price']):.2f} each")
@@ -277,5 +274,34 @@ def render_customer_portal():
                             else:
                                 st.markdown(f"<div style='text-align:center; color:#94A3B8;'>⚪<br>{labels[i]}</div>", unsafe_allow_html=True)
 
-                if order.get("delivery_boy_name") and status in ("Out for Delivery", "Delivered"):
-                    st.info(f"🛵 **Delivery Partner Assigned:** {order['delivery_boy_name']} ({order.get('delivery_boy_phone', 'N/A')})")
+                # ── INTERACTION: OUT FOR DELIVERY HANDOVER & OTP ──
+                if status == "Out for Delivery":
+                    st.warning(f"🔑 **Delivery Verification OTP:** `{otp}` (Share this 4-digit PIN with your delivery partner on arrival!)")
+                    if order.get("delivery_boy_name"):
+                        st.info(f"🛵 **Delivery Partner Assigned:** {order['delivery_boy_name']} (📞 {order.get('delivery_boy_phone', '9900112233')})")
+
+                # ── INTERACTION: DELIVERED CONFIRMATION & RATING ──
+                elif status == "Delivered":
+                    st.success("🎉 **Food Delivered Successfully!** We hope you enjoy your meal.")
+                    
+                    if rating:
+                        st.markdown(f"⭐ **Your Rating:** {'★' * rating}{'☆' * (5 - rating)} (`{rating}/5 Stars`)")
+                        if review:
+                            st.caption(f"💬 *\"{review}\"*")
+                    else:
+                        with st.expander("⭐ Rate & Review Your Delivery Experience", expanded=True):
+                            with st.form(key=f"rate_form_{oid}"):
+                                user_rating = st.slider("Select Rating (1 = Poor, 5 = Excellent)", 1, 5, 5)
+                                user_review = st.text_input("Feedback Review (Optional)", placeholder="e.g. Delicious food, hot delivery!")
+                                rate_sub = st.form_submit_button("Submit Rating & Review", type="primary")
+
+                                if rate_sub:
+                                    res, err = api_put(f"/orders/{oid}/rate", {
+                                        "rating": user_rating,
+                                        "review_text": user_review.strip()
+                                    })
+                                    if err:
+                                        st.error(err)
+                                    else:
+                                        st.toast("Thank you for your rating & feedback! ❤️")
+                                        st.rerun()

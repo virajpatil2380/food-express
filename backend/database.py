@@ -263,9 +263,9 @@ def init_db():
             (1, "Crispy Spring Rolls", "Golden fried veggie rolls with spicy dip", 180.00, "https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=600&q=80", True),
             (2, "Butter Chicken", "Rich creamy tomato gravy with tender chicken", 340.00, "https://images.unsplash.com/photo-1603894584373-5ac82b2ae398?auto=format&fit=crop&w=600&q=80", True),
             (2, "Dal Makhani", "Slow cooked black lentils with cream & butter", 260.00, "https://images.unsplash.com/photo-1546833999-b9f581a1996d?auto=format&fit=crop&w=600&q=80", True),
-            (2, "Garlic Naan", "Clay oven baked flatbread with garlic butter", 60.00, "https://images.unsplash.com/photo-Nt_wnMl7Siw?auto=format&fit=crop&w=600&q=80", True),
-            (3, "Gulab Jamun", "Soft milk dumplings in rose sugar syrup", 120.00, "https://images.unsplash.com/photo-1589301760014-d929f3979dbc?auto=format&fit=crop&w=600&q=80", True),
-            (3, "Chocolate Lava Cake", "Warm cake with molten chocolate center", 190.00, "https://images.unsplash.com/photo-Nt_wnMl7Siw?auto=format&fit=crop&w=600&q=80", True),
+            (2, "Garlic Naan", "Clay oven baked flatbread with garlic butter", 60.00, "https://plus.unsplash.com/premium_photo-1666663150789-be4318924491?auto=format&fit=crop&w=600&q=80", True),
+            (3, "Gulab Jamun", "Soft milk dumplings in rose sugar syrup", 120.00, "https://images.unsplash.com/photo-1666190092159-3171cf0fbb12?auto=format&fit=crop&w=600&q=80", True),
+            (3, "Chocolate Lava Cake", "Warm cake with molten chocolate center", 190.00, "https://images.unsplash.com/photo-1606313564200-e75d5e30476c?auto=format&fit=crop&w=600&q=80", True),
             (4, "Mango Lassi", "Sweet yogurt smoothie with Alphonso mangoes", 110.00, "https://images.unsplash.com/photo-1534353473418-4cfa6c56fd38?auto=format&fit=crop&w=600&q=80", True),
             (4, "Iced Cold Coffee", "Espresso with cold milk & vanilla ice cream", 140.00, "https://images.unsplash.com/photo-1517701604599-bb29b565090c?auto=format&fit=crop&w=600&q=80", True),
         ]

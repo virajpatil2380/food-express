@@ -104,11 +104,21 @@ def get_delivery_orders():
 
 @order_bp.route("/delivery/delivered", methods=["PUT"])
 def mark_delivered():
+    """Validates entered OTP against DB before completing delivery."""
     data = request.get_json() or {}
     order_id = data.get("order_id")
+    entered_otp = str(data.get("entered_otp", "")).strip()
 
     if not order_id:
-        return jsonify({"error": "order_id required"}), 400
+        return jsonify({"error": "Order ID is required"}), 400
+
+    order = OrderModel.get_order_by_id(order_id)
+    if not order:
+        return jsonify({"error": "Order not found"}), 404
+
+    expected_otp = str(order.get("otp_code", "")).strip()
+    if expected_otp and entered_otp != expected_otp:
+        return jsonify({"error": f"Invalid OTP! Customer OTP does not match."}), 400
 
     OrderModel.update_status(order_id, "Delivered")
-    return jsonify({"message": f"Order #{order_id} delivered successfully"}), 200
+    return jsonify({"message": f"Order #{order_id} verified and delivered successfully!"}), 200

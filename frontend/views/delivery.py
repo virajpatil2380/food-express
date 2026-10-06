@@ -13,11 +13,13 @@ def render_delivery_panel():
         return
 
     # ─── DEDICATED DELIVERY PARTNER DASHBOARD ───
-    st.markdown("## 🚚 My Delivery Assignments")
-    st.caption(f"Logged in as Delivery Partner: **{user.get('name', 'Driver')}** ({user.get('email')})")
+    st.markdown("## 🚚 Delivery Partner Dashboard")
+    st.caption(f"Active Delivery Partner: **{user.get('name', 'Driver')}** ({user.get('email')})")
 
-    if st.button("🔄 Refresh My Delivery Queue", use_container_width=False):
-        st.rerun()
+    col_btn, _ = st.columns([1, 4])
+    with col_btn:
+        if st.button("🔄 Refresh Orders", use_container_width=True):
+            st.rerun()
 
     # Fetch ONLY orders assigned to THIS specific delivery partner
     orders, err = api_get("/delivery/orders", params={"delivery_user_id": delivery_user_id})
@@ -31,20 +33,22 @@ def render_delivery_panel():
     assigned_done = [o for o in orders if o["status"] == "Delivered" and o.get("delivery_user_id") == delivery_user_id] if orders else []
 
     c1, c2 = st.columns(2)
-    c1.metric("🚚 Assigned On The Way", len(assigned_active))
-    c2.metric("✅ Delivered By Me Today", len(assigned_done))
+    c1.metric("🛵 Active Deliveries (On The Way)", len(assigned_active))
+    c2.metric("✅ Completed Today", len(assigned_done))
 
     st.divider()
 
     if not assigned_active and not assigned_done:
-        st.info(f"💡 **Hello {user.get('name', 'Driver')}!** You have 0 assigned deliveries in your queue.")
+        st.info(f"💡 **Hello {user.get('name', 'Driver')}!** You have no assigned deliveries right now.")
         st.markdown("""
-        <div style="background:#FFF3E0; padding:16px; border-radius:12px; border:1px solid #FFE0B2; margin-top:10px;">
-            <h4 style="margin:0 0 8px 0; color:#E65100;">ℹ️ How Delivery Assignment Works:</h4>
-            <ol style="margin:0; padding-left:20px; color:#555;">
-                <li>Customer places an order ➔ Kitchen cooks &amp; marks order 🟢 <b>Ready</b>.</li>
-                <li><b>Admin</b> assigns the ready order specifically to <b>YOUR account</b>.</li>
-                <li>The moment Admin assigns an order to you, it will appear right here with Customer Address, Phone, &amp; Verification OTP!</li>
+        <div style="background:#FFF3E0; padding:18px; border-radius:14px; border:1px solid #FFE0B2; margin-top:10px;">
+            <h4 style="margin:0 0 10px 0; color:#E65100;">🛵 Real-World Delivery Partner Workflow:</h4>
+            <ol style="margin:0; padding-left:22px; color:#475569; line-height:1.7;">
+                <li>Customer orders food on Food Express.</li>
+                <li>Kitchen cooks and prepares the meal (Status: 🟢 <b>Ready</b>).</li>
+                <li><b>Admin assigns the ready parcel specifically to YOU</b>.</li>
+                <li>The order immediately pops up here with Customer Address, Phone, &amp; Navigation details.</li>
+                <li>Reach Customer location, <b>ask Customer for 4-digit OTP</b>, enter it below to confirm delivery!</li>
             </ol>
         </div>
         """, unsafe_allow_html=True)
@@ -52,38 +56,57 @@ def render_delivery_panel():
 
     # ── ASSIGNED ACTIVE DELIVERIES ──
     if assigned_active:
-        st.markdown("### 🚚 Assigned Active Deliveries")
+        st.markdown("### 🛵 Current Live Deliveries (Pending Handover)")
         for order in assigned_active:
             oid = order["order_id"]
-            otp = order.get("otp_code", "1234")
 
             with st.container(border=True):
                 col1, col2 = st.columns([3, 1])
                 with col1:
-                    st.markdown(f"### Order #{oid} 🔵 `Out for Delivery`")
-                    st.write(f"👤 Customer: **{order.get('customer_name', 'Guest')}** · 📞 Call: `{order.get('customer_phone', 'N/A')}`")
-                    st.write(f"📍 **Delivery Address:** {order['delivery_address']}")
-                    st.info(f"🔑 **Customer OTP Verification PIN:** `{otp}`")
+                    st.markdown(f"### 📦 Order #{oid} · 🔵 `Out for Delivery`")
+                    st.markdown(f"**Customer:** {order.get('customer_name', 'Guest')}")
+                    st.markdown(f"📞 **Customer Phone:** `{order.get('customer_phone', 'N/A')}`")
+                    st.markdown(f"📍 **Delivery Address:** **{order['delivery_address']}**")
                 with col2:
                     st.markdown(f"<h3 style='color:#E65100; margin:0;'>₹{float(order['total_amount']):.2f}</h3>", unsafe_allow_html=True)
-                    st.caption(f"Method: **{order.get('payment_method', 'COD')}**")
+                    st.caption(f"Payment Mode: **{order.get('payment_method', 'COD')}**")
+                    st.caption(f"Payment Status: **{order.get('payment_status', 'Pending')}**")
 
-                st.markdown("**Dishes to Deliver:**")
+                st.markdown("**Dishes in Parcel:**")
                 for item in order.get("items", []):
                     st.caption(f"  • {item['name']} × {item['quantity']}")
 
-                if st.button(f"✅ Verify OTP & Complete Handover #{oid}", key=f"delivered_{oid}", use_container_width=True, type="primary"):
-                    api_put("/delivery/delivered", {"order_id": oid})
-                    st.balloons()
-                    st.success(f"Order #{oid} delivered successfully! 🎉")
-                    st.rerun()
+                st.markdown("---")
+                # Real-world Customer OTP Verification Form
+                st.markdown("#### 🔐 Customer Handover Verification")
+                st.caption("Ask customer for the 4-digit OTP shown on their tracking screen before handing over the food.")
+                
+                c_otp_in, c_otp_btn = st.columns([2, 1])
+                with c_otp_in:
+                    input_otp = st.text_input(f"Enter Customer OTP for Order #{oid}", max_chars=4, placeholder="e.g. 1234", key=f"otp_in_{oid}")
+                with c_otp_btn:
+                    st.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)
+                    if st.button(f"✅ Verify OTP & Deliver #{oid}", key=f"delivered_{oid}", use_container_width=True, type="primary"):
+                        if not input_otp or len(input_otp.strip()) != 4:
+                            st.error("Please enter a valid 4-digit Customer OTP.")
+                        else:
+                            res, err = api_put("/delivery/delivered", {
+                                "order_id": oid,
+                                "entered_otp": input_otp.strip()
+                            })
+                            if err:
+                                st.error(err)
+                            else:
+                                st.balloons()
+                                st.success(f"Order #{oid} verified and delivered successfully! 🎉")
+                                st.rerun()
 
     # ── COMPLETED BY THIS DRIVER ──
     if assigned_done:
-        with st.expander(f"✅ Completed Deliveries ({len(assigned_done)})", expanded=True):
+        with st.expander(f"✅ Your Completed Deliveries Today ({len(assigned_done)})", expanded=False):
             for order in assigned_done:
                 c1, c2, c3 = st.columns([2, 2, 1])
-                c1.write(f"**Order #{order['order_id']}**")
+                c1.write(f"**Order #{order['order_id']}** (Delivered)")
                 c2.write(f"Customer: {order.get('customer_name', 'Guest')} ({order.get('customer_phone', 'N/A')})")
                 c3.write(f"**₹{float(order['total_amount']):.2f}**")
 
